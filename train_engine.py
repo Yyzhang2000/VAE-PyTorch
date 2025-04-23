@@ -109,7 +109,7 @@ def train(model, optimizer, train_loader, criterion, writer, train_config, devic
             )
             logging.info(f"Best model saved with loss: {best_loss:.4f}")
 
-        if (epoch + 1) % 2 == 0:
+        if (epoch + 1) % 20 == 0:
             # Save a sample of the model's output
             with torch.no_grad():
                 model.eval()
