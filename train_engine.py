@@ -10,29 +10,38 @@ from torchvision.utils import make_grid
 import torchvision
 
 
+def kl_annealing_scheduler(epoch, total_epochs, start=0.0, end=1.0):
+    """Anneal the KL divergence term in the loss function."""
+    # Sigmoid function to control the KL annealing
+    return float(1 / (1 + np.exp(-(epoch - total_epochs / 2) / (total_epochs / 10))))
+
+
 def train_one_epoch(
     model,
     train_loader,
     optimizer,
     criterion,
     writer,
+    total_epochs,
     epoch,
     scheduler=None,
     device=torch.device("cpu"),
 ):
     model.train()
     losses = []
+    recon_losses = []
 
     progress_bar = tqdm(
         enumerate(train_loader), total=len(train_loader), desc=f"Epoch {epoch+1}"
     )
     for batch_idx, image in progress_bar:
-
+        beta = kl_annealing_scheduler(epoch, total_epochs=total_epochs)
         image = image.float().to(device)
 
         (x_recon, z_mean, z_logvar) = model(image)
         recon_loss, kl_loss = criterion(x_recon, image, z_mean, z_logvar)
-        loss = recon_loss + kl_loss
+        kl_loss = beta * kl_loss
+        loss = recon_loss + beta * kl_loss
 
         if torch.isnan(loss):
             print("NaN detected in loss!")
@@ -46,6 +55,7 @@ def train_one_epoch(
 
         recon_loss = recon_loss.item()
         losses.append(loss.item())
+        recon_losses.append(recon_loss)
 
         if writer is not None:
             writer.add_scalar(
@@ -57,11 +67,15 @@ def train_one_epoch(
             writer.add_scalar(
                 "train/loss", loss.item(), epoch * len(train_loader) + batch_idx
             )
+            writer.add_scalar("train/beta", beta, epoch * len(train_loader) + batch_idx)
 
         progress_bar.set_postfix(
-            recon_loss=recon_loss,
-            loss=loss.item(),
+            recon_loss=np.mean(recon_losses),
+            loss=np.mean(losses),
         )
+
+    if writer is not None:
+        writer.add_scalar("train/learning_rate", optimizer.param_groups[0]["lr"], epoch)
     if scheduler is not None:
         scheduler.step()
 
@@ -100,6 +114,7 @@ def train(
             criterion=criterion,
             scheduler=scheduler,
             writer=writer,
+            total_epochs=train_config.num_epochs,
             epoch=epoch,
             device=device,
         )

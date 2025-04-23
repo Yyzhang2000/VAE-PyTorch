@@ -27,6 +27,7 @@ class TRAIN_CONFIG:
 
     # Optimizer
     learning_rate: float = 1e-4
+    min_lr: float = 1e-6
     betas: tuple = (0.9, 0.999)
     weight_decay: float = 1e-5
 
@@ -76,9 +77,9 @@ if __name__ == "__main__":
         betas=TRAIN_CONFIG.betas,
         weight_decay=TRAIN_CONFIG.weight_decay,
     )
-    scheduler = torch.optim.lr_scheduler.StepLR(
-        optimizer, step_size=50, gamma=0.1
-    )  # StepLR scheduler
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, T_max=training_config.num_epochs, eta_min=training_config.min_lr
+    )
     # End of optimizer
 
     logging.info("Starting training...")
