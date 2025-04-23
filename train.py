@@ -22,7 +22,7 @@ class TRAIN_CONFIG:
     log_dir: str = "./logs"
     task_name: str = "pokemon-vae"
     model_dir: str = "models"
-    num_epochs: int = 200
+    num_epochs: int = 400
     batch_size: int = 64
 
     # Optimizer
@@ -76,6 +76,9 @@ if __name__ == "__main__":
         betas=TRAIN_CONFIG.betas,
         weight_decay=TRAIN_CONFIG.weight_decay,
     )
+    scheduler = torch.optim.lr_scheduler.StepLR(
+        optimizer, step_size=50, gamma=0.1
+    )  # StepLR scheduler
     # End of optimizer
 
     logging.info("Starting training...")
@@ -94,5 +97,6 @@ if __name__ == "__main__":
         criterion=criterion,
         writer=writer,
         train_config=training_config,
+        scheduler=scheduler,
         device=device,
     )

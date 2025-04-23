@@ -43,8 +43,6 @@ def train_one_epoch(
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        if scheduler is not None:
-            scheduler.step()
 
         recon_loss = recon_loss.item()
         losses.append(loss.item())
@@ -64,11 +62,15 @@ def train_one_epoch(
             recon_loss=recon_loss,
             loss=loss.item(),
         )
+    if scheduler is not None:
+        scheduler.step()
 
     return np.mean(losses)
 
 
-def train(model, optimizer, train_loader, criterion, writer, train_config, device):
+def train(
+    model, optimizer, scheduler, train_loader, criterion, writer, train_config, device
+):
     model.to(device)
 
     # Get random sample from the dataset
@@ -96,6 +98,7 @@ def train(model, optimizer, train_loader, criterion, writer, train_config, devic
             train_loader=train_loader,
             optimizer=optimizer,
             criterion=criterion,
+            scheduler=scheduler,
             writer=writer,
             epoch=epoch,
             device=device,
