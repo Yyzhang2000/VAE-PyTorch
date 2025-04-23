@@ -43,7 +43,7 @@ if __name__ == "__main__":
     set_logger(os.path.join(training_config.model_dir, "train.log"))
 
     logging.info(
-        f"Configuration saved to {os.path.join(training_config.model_dir, "config.yaml")}"
+        f"Configuration saved to {os.path.join(training_config.model_dir, 'config.yaml')}"
     )
 
     # Common setup
