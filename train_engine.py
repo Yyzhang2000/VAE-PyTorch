@@ -75,10 +75,17 @@ def train(model, optimizer, train_loader, criterion, writer, train_config, devic
     image = next(iter(train_loader))
     random_indices = torch.randint(low=0, high=len(image), size=(10,))
     random_images = image[random_indices]
-    os.makedirs(os.path.join(train_config.model_dir, "sample_images"), exist_ok=True)
+    image_dir = os.path.join(train_config.model_dir, "sample_images")
+    if not os.path.exists(image_dir):
+        os.makedirs(image_dir, exist_ok=True)
 
     images_grid = make_grid(random_images, nrow=5, normalize=True)
     writer.add_image("train/sample_images", images_grid, 0)
+    # Save the random images
+    torchvision.utils.save_image(
+        images_grid,
+        os.path.join(image_dir, "sample_images.png"),
+    )
     random_images = random_images.to(device)
     # Save images
 
