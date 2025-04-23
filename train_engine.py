@@ -16,6 +16,57 @@ def kl_annealing_scheduler(epoch, total_epochs, start=0.0, end=1.0):
     return float(1 / (1 + np.exp(-(epoch - total_epochs / 2) / (total_epochs / 10))))
 
 
+def evaluate_model(
+    model,
+    test_loader,
+    criterion,
+    writer,
+    epoch,
+    device=torch.device("cpu"),
+):
+    model.eval()
+    losses = []
+    recon_losses = []
+    kl_losses = []
+
+    real_images = []
+    generated_images = []
+    progress_bar = tqdm(
+        enumerate(test_loader),
+        total=len(test_loader),
+        desc=f"Evaluating epoch {epoch+1}",
+    )
+    with torch.no_grad():
+        for batch_idx, image in progress_bar:
+            image = image.float().to(device)
+            (x_recon, z_mean, z_logvar) = model(image)
+            recon_loss, kl_loss = criterion(x_recon, image, z_mean, z_logvar)
+            loss = recon_loss + kl_loss
+
+            loss = loss.item()
+            recon_loss = recon_loss.item()
+            kl_loss = kl_loss.item()
+            losses.append(loss)
+            recon_losses.append(recon_loss)
+            kl_losses.append(kl_loss)
+
+            real_images.append(image.cpu())
+            generated_images.append(x_recon.cpu())
+
+            if writer is not None:
+                writer.add_scalar(
+                    "recon_loss/test", recon_loss, epoch * len(test_loader) + batch_idx
+                )
+                writer.add_scalar(
+                    "kl_loss/test", kl_loss, epoch * len(test_loader) + batch_idx
+                )
+                writer.add_scalar(
+                    "loss/test", loss, epoch * len(test_loader) + batch_idx
+                )
+
+    return np.mean(losses)
+
+
 def train_one_epoch(
     model,
     train_loader,
@@ -32,7 +83,9 @@ def train_one_epoch(
     recon_losses = []
 
     progress_bar = tqdm(
-        enumerate(train_loader), total=len(train_loader), desc=f"Epoch {epoch+1}"
+        enumerate(train_loader),
+        total=len(train_loader),
+        desc=f"Training epoch {epoch+1}",
     )
     for batch_idx, image in progress_bar:
         beta = kl_annealing_scheduler(epoch, total_epochs=total_epochs)
@@ -59,15 +112,15 @@ def train_one_epoch(
 
         if writer is not None:
             writer.add_scalar(
-                "train/recon_loss", recon_loss, epoch * len(train_loader) + batch_idx
+                "recon_loss/train", recon_loss, epoch * len(train_loader) + batch_idx
             )
             writer.add_scalar(
-                "train/kl_loss", kl_loss.item(), epoch * len(train_loader) + batch_idx
+                "kl_loss/train", kl_loss.item(), epoch * len(train_loader) + batch_idx
             )
             writer.add_scalar(
-                "train/loss", loss.item(), epoch * len(train_loader) + batch_idx
+                "loss/train", loss.item(), epoch * len(train_loader) + batch_idx
             )
-            writer.add_scalar("train/beta", beta, epoch * len(train_loader) + batch_idx)
+            writer.add_scalar("beta/train", beta, epoch * len(train_loader) + batch_idx)
 
         progress_bar.set_postfix(
             recon_loss=np.mean(recon_losses),
@@ -75,7 +128,7 @@ def train_one_epoch(
         )
 
     if writer is not None:
-        writer.add_scalar("train/learning_rate", optimizer.param_groups[0]["lr"], epoch)
+        writer.add_scalar("learning_rate/train", optimizer.param_groups[0]["lr"], epoch)
     if scheduler is not None:
         scheduler.step()
 
@@ -83,7 +136,15 @@ def train_one_epoch(
 
 
 def train(
-    model, optimizer, scheduler, train_loader, criterion, writer, train_config, device
+    model,
+    optimizer,
+    scheduler,
+    train_loader,
+    val_loader,
+    criterion,
+    writer,
+    train_config,
+    device,
 ):
     model.to(device)
 
@@ -118,23 +179,34 @@ def train(
             epoch=epoch,
             device=device,
         )
+
+        val_loss = evaluate_model(
+            model=model,
+            test_loader=val_loader,
+            criterion=criterion,
+            writer=writer,
+            epoch=epoch,
+            device=device,
+        )
+
         logging.info(
             f"Epoch [{epoch + 1}/{train_config.num_epochs}], "
-            f"Train Loss: {train_loss:.4f}"
+            f"Train Loss: {train_loss:.4f} | Validation Loss: {val_loss:.4f}"
         )
+
         torch.save(
             model.state_dict(),
             os.path.join(train_config.model_dir, f"latest_vae_model.pth"),
         )
-        if train_loss < best_loss:
-            best_loss = train_loss
+        if val_loss < best_loss:
+            best_loss = val_loss
             shutil.copyfile(
                 os.path.join(train_config.model_dir, "latest_vae_model.pth"),
                 os.path.join(train_config.model_dir, "best_vae_model.pth"),
             )
             logging.info(f"Best model saved with loss: {best_loss:.4f}")
 
-        if (epoch + 1) % 20 == 0:
+        if (epoch + 1) % 2 == 0:
             # Save a sample of the model's output
             with torch.no_grad():
                 model.eval()

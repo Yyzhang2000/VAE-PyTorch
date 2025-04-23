@@ -20,9 +20,9 @@ class TRAIN_CONFIG:
     # Config for training
     seed = 42
     log_dir: str = "./logs"
-    task_name: str = "pokemon-vae"
+    task_name: str = "pokemon2000-vae"
     model_dir: str = "models"
-    num_epochs: int = 400
+    num_epochs: int = 10
     batch_size: int = 64
 
     # Optimizer
@@ -55,9 +55,17 @@ if __name__ == "__main__":
     # End of common setup
 
     # Dataset
-    train_dataset = PokemonDataset()
+    train_dataset = PokemonDataset(root_dir="data/train")
     train_loader = DataLoader(
         train_dataset,
+        batch_size=training_config.batch_size,
+        shuffle=True,
+        num_workers=4,
+        pin_memory=True,
+    )
+    val_dataset = PokemonDataset(root_dir="data/val")
+    val_loader = DataLoader(
+        val_dataset,
         batch_size=training_config.batch_size,
         shuffle=True,
         num_workers=4,
@@ -95,6 +103,7 @@ if __name__ == "__main__":
         model=model,
         optimizer=optimizer,
         train_loader=train_loader,
+        val_loader=val_loader,
         criterion=criterion,
         writer=writer,
         train_config=training_config,

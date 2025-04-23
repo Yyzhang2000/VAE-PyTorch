@@ -14,6 +14,10 @@ if [[ -z "$KAGGLE_USERNAME" || -z "$KAGGLE_KEY" ]]; then
   fi
 fi
 
-kaggle datasets download kvpratama/pokemon-images-dataset -p ./data --unzip
+kaggle datasets download hlrhegemony/pokemon-image-dataset -p ./data --unzip
 
 echo "✅ Dataset downloaded to ./data"
+
+python split_dataset.py  
+
+echo "✅ Dataset split into train and test sets"

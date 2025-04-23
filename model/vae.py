@@ -6,9 +6,59 @@ import torch.nn.functional as F
 from .config import ModelConfig
 
 
+class _ResidualBlock(nn.Module):
+    def __init__(self, in_dim: int = 64, out_dim: int = 64, groups: int = 1, scale=1.0):
+        super().__init__()
+
+        self.scale = scale
+        self.hidden_dim = int(out_dim * scale)
+        self.groups = groups
+
+        if in_dim != out_dim:
+            self.expand = nn.Conv2d(in_dim, out_dim, kernel_size=1, stride=1, padding=0)
+        else:
+            self.expand = nn.Identity()
+
+        self.conv1 = nn.Conv2d(
+            in_dim,
+            self.hidden_dim,
+            kernel_size=3,
+            stride=1,
+            padding=1,
+            groups=groups,
+            bias=False,
+        )
+        self.bn1 = nn.BatchNorm2d(self.hidden_dim)
+        self.relu1 = nn.LeakyReLU(0.2)
+        self.conv2 = nn.Conv2d(
+            self.hidden_dim,
+            out_dim,
+            kernel_size=3,
+            stride=1,
+            padding=1,
+            groups=groups,
+            bias=False,
+        )
+        self.bn2 = nn.BatchNorm2d(out_dim)
+        self.relu2 = nn.LeakyReLU(0.2)
+
+    def forward(self, x: torch.Tensor):
+        identity = self.expand(x)
+        out = self.relu1(self.bn1(self.conv1(x)))
+        out = self.conv2(out)
+        out += identity
+
+        out = self.relu2(self.bn2(out))
+        return out
+
+
 class Encoder(nn.Module):
     def __init__(self, config: ModelConfig):
         super().__init__()
+
+        assert (
+            2 ** len(config.encoder_channels)
+        ) * 4 == config.image_size, "Image size must be divisible by 2^N, where N is the number of encoder channels."
 
         self.in_channels = config.in_channels
         self.image_size = config.image_size
@@ -16,28 +66,42 @@ class Encoder(nn.Module):
         layers = list()
 
         layers.append(
-            nn.Conv2d(
-                self.in_channels,
-                config.encoder_channels[0],
-                kernel_size=config.encoder_kernel_sizes[0],
-                stride=config.encoder_strides[0],
-                padding=config.encoder_padding[0],
+            nn.Sequential(
+                nn.Conv2d(
+                    self.in_channels,
+                    config.encoder_channels[0],
+                    kernel_size=5,
+                    stride=1,
+                    padding=2,
+                    bias=False,
+                ),
+                nn.BatchNorm2d(config.encoder_channels[0]),
+                nn.LeakyReLU(0.2),
+                nn.AvgPool2d(2),
             )
         )
-        layers.append(nn.LeakyReLU(0.2))
 
         for i in range(1, len(config.encoder_channels)):
             layers.append(
-                nn.Conv2d(
-                    config.encoder_channels[i - 1],
-                    config.encoder_channels[i],
-                    kernel_size=config.encoder_kernel_sizes[i],
-                    stride=config.encoder_strides[i],
-                    padding=config.encoder_padding[i],
+                nn.Sequential(
+                    _ResidualBlock(
+                        config.encoder_channels[i - 1],
+                        config.encoder_channels[i],
+                        groups=1,
+                        scale=1,
+                    ),
+                    nn.AvgPool2d(2),
                 )
             )
-            layers.append(nn.LeakyReLU(0.2))
-            layers.append(nn.BatchNorm2d(config.encoder_channels[i]))
+
+        layers.append(
+            _ResidualBlock(
+                config.encoder_channels[-1],
+                config.encoder_channels[-1],
+                groups=1,
+                scale=1,
+            )
+        )
 
         self.encoder = nn.Sequential(*layers)
 
@@ -64,6 +128,10 @@ class Decoder(nn.Module):
     def __init__(self, config: ModelConfig):
         super().__init__()
 
+        assert (
+            2 ** len(config.encoder_channels)
+        ) * 4 == config.image_size, "Image size must be divisible by 2^N, where N is the number of encoder channels."
+
         self.latent_dim = config.latent_dim
         self.output_size = config.image_size
         self.config = config
@@ -80,26 +148,49 @@ class Decoder(nn.Module):
 
         layers = list()
 
+        layers.append(
+            _ResidualBlock(
+                config.decoder_channels[0],
+                config.decoder_channels[0],
+                groups=1,
+                scale=1,
+            ),
+        )
+        layers.append(
+            nn.Upsample(scale_factor=2, mode="nearest"),
+        )
+        layers.append(nn.BatchNorm2d(config.decoder_channels[0]))
+
         for i in range(1, len(config.decoder_channels)):
             layers.append(
-                nn.ConvTranspose2d(
+                _ResidualBlock(
                     config.decoder_channels[i - 1],
                     config.decoder_channels[i],
-                    kernel_size=config.decoder_kernel_sizes[i - 1],
-                    stride=config.decoder_strides[i - 1],
-                    padding=config.decoder_padding[i - 1],
-                )
+                    groups=1,
+                    scale=1,
+                ),
             )
-            layers.append(nn.ReLU())
+            layers.append(
+                nn.Upsample(scale_factor=2, mode="nearest"),
+            )
             layers.append(nn.BatchNorm2d(config.decoder_channels[i]))
 
         layers.append(
-            nn.ConvTranspose2d(
+            _ResidualBlock(
+                config.decoder_channels[-1],
+                config.decoder_channels[-1],
+                groups=1,
+                scale=1,
+            )
+        )
+
+        layers.append(
+            nn.Conv2d(
                 config.decoder_channels[-1],
                 config.in_channels,
-                kernel_size=config.decoder_kernel_sizes[-1],
-                stride=config.decoder_strides[-1],
-                padding=config.decoder_padding[-1],
+                kernel_size=5,
+                stride=1,
+                padding=2,
             )
         )
 
