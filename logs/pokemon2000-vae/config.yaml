@@ -1,0 +1,30 @@
+model_config:
+  decoder_channels:
+  - 512
+  - 512
+  - 512
+  - 256
+  - 128
+  - 64
+  encoder_channels:
+  - 64
+  - 128
+  - 256
+  - 512
+  - 512
+  - 512
+  image_size: 256
+  in_channels: 3
+  latent_dim: 512
+train_config:
+  batch_size: 32
+  betas:
+  - 0.9
+  - 0.999
+  learning_rate: 0.0001
+  log_dir: ./logs
+  min_lr: 1.0e-06
+  model_dir: ./logs/pokemon2000-vae
+  num_epochs: 400
+  task_name: pokemon2000-vae
+  weight_decay: 1.0e-05

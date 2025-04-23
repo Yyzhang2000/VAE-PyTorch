@@ -22,8 +22,8 @@ class TRAIN_CONFIG:
     log_dir: str = "./logs"
     task_name: str = "pokemon2000-vae"
     model_dir: str = "models"
-    num_epochs: int = 10
-    batch_size: int = 64
+    num_epochs: int = 400
+    batch_size: int = 32
 
     # Optimizer
     learning_rate: float = 1e-4

@@ -33,7 +33,7 @@ for path in train_paths:
 # Copy images to validation directory
 for path in val_paths:
     shutil.copy(
-        path, os.path.join(train_dir, path.split("/")[-2] + os.path.basename(path))
+        path, os.path.join(val_dir, path.split("/")[-2] + os.path.basename(path))
     )
 
 print(f"Training images: {len(train_paths)}, Validation images: {len(val_paths)}")
