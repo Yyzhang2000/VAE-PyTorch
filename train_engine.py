@@ -125,10 +125,12 @@ def train(model, optimizer, train_loader, criterion, writer, train_config, devic
                 writer.add_image("train/sample_images", sample_images_grid, (epoch + 1))
                 # Save the sample images
                 sample_images_path = os.path.join(
-                    train_config.model_dir,
-                    "sample_images",
-                    f"sample_images_epoch_{epoch}.png",
+                    image_dir,
+                    f"sample_images_epoch_{epoch + 1}.png",
                 )
                 torchvision.utils.save_image(sample_images_grid, sample_images_path)
+                logging.info(
+                    f"Sample images at {epoch + 1} saved at {os.path.join(image_dir, f'sample_images_epoch_{epoch + 1}.png')}"
+                )
 
     logging.info(f"Training complete. Best train loss: {best_loss:.2f}%")
